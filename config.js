@@ -1,16 +1,16 @@
 var config = {}
 
-config.endpoint = 'https://f197779a-0ee0-4-231-b9ee.documents.azure.com:443/;AccountKey=N3YyvZDLtX49ZzL0Ju0RKyzYbmhpMFLiHQaeuvGNbppBOV0Bn9PKgcUiO8qoPzq4l8kfCpKhSseNACDbUiZ14g=='
+config.endpoint = 'https://f197779a-0ee0-4-231-b9ee.documents.azure.com:443/'
 config.key = 'N3YyvZDLtX49ZzL0Ju0RKyzYbmhpMFLiHQaeuvGNbppBOV0Bn9PKgcUiO8qoPzq4l8kfCpKhSseNACDbUiZ14g=='
 config.database = {
   id: 'db'
 }
 
 config.container = {
-  id: 'items'
+  id: 'Games'
 }
 
-config.items = {
+/*config.items = {
 
 
   Andersen: {
@@ -85,6 +85,6 @@ config.items = {
     },
     isRegistered: false
   }
-}
+}*/
 
 module.exports = config
