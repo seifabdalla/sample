@@ -1,7 +1,7 @@
 var config = {}
 
-config.endpoint = 'https://f197779a-0ee0-4-231-b9ee.documents.azure.com:443/'
-config.key = 'N3YyvZDLtX49ZzL0Ju0RKyzYbmhpMFLiHQaeuvGNbppBOV0Bn9PKgcUiO8qoPzq4l8kfCpKhSseNACDbUiZ14g=='
+config.endpoint = 'https://stock-game.documents.azure.com:443/'
+config.key = '0pV793J6MsrYYQLNUF78agfG27tCnl4EwhrB1X1HNHDMhh3RUx3l70zqXXk6JhFsB4MYDPZMjW4xACDbBFF6dw=='
 config.database = {
   id: 'db'
 }
