@@ -114,7 +114,7 @@ app.post('/games/:id/newplayer', async (req,res)=> {
 })
 
 
-app.get('/stocks', async (req, res) => {
+/*app.get('/stocks', async (req, res) => {
 
   // Try to query all the stocks from the container
   try {
@@ -125,12 +125,8 @@ app.get('/stocks', async (req, res) => {
     // If there is an error, send a 500 status code and the error message as the response
     res.status(500).json(error);
   }
-});
+});*/
 
-
-async function updateProfit(game,user,current_day){
-
-}
 
 app.put('/games/:id/nextday', async (req, res) => {
   const id = req.params.id;
@@ -333,6 +329,40 @@ app.post('/games/:id/buy', async (req, res) => {
   } else {
     // If the user does not exist or does not have enough stocks to sell, send a 400 status code and an error message as the response
     res.status(400).json('Invalid request');
+  }
+});
+
+app.get('/games/:id/transactions', async (req, res) => {
+  // Get the game id, user id, stock symbol, and quantity from the request body
+  try{
+  const gameId = req.params.id;
+  const user_id = req.body.user_id;
+  // Get the current day of the game session
+  const { resource:game } = await container.item(gameId, gameId).read();
+  const user = game.users.find(u => u.user_id === user_id);
+  const transactions=user.transactions;
+  res.status(200).json(transactions);
+  } 
+  catch (error) {
+    // If there is an error, send a 500 status code and the error message as the response
+    res.status(500).json(error);
+  }
+});
+
+app.get('/games/:id/investments', async (req, res) => {
+  // Get the game id, user id, stock symbol, and quantity from the request body
+  try{
+  const gameId = req.params.id;
+  const user_id = req.body.user_id;
+  // Get the current day of the game session
+  const { resource:game } = await container.item(gameId, gameId).read();
+  const user = game.users.find(u => u.user_id === user_id);
+  const investments=user.investments;
+  res.status(200).json(investments);
+  } 
+  catch (error) {
+    // If there is an error, send a 500 status code and the error message as the response
+    res.status(500).json(error);
   }
 });
 
