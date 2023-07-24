@@ -33,7 +33,7 @@ app.post('/games', async (req, res) => {
     id: Game_id,
     current_day:1,
     users: [],
-    stocks: await generatestocksforgame(["AAPL"])
+    stocks: await generatestocksforgame(["AAPL","ACET","ASB","BHP","CMCSA","CMD","CMTL","DLX","FITB","GPS","GRC","HBAN","IBM","MYE","MYL","NVO","PCH","PG","VSH","WWW"])
   };
 
   let User_id = uuidv4();
@@ -420,7 +420,7 @@ async function calculateProfit(user, game) {
   // Calculate the profit as the difference between the total value plus balance and the starting balance
   const profit = (totalValue + balance) - startingBalance;
   // Return the profit variable
-  return profit;
+  return profit.toFixed(2);;
 }
 
 
