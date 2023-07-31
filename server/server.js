@@ -9,6 +9,10 @@ const app = express();
 // Use express.json middleware to parse JSON request bodies
 app.use(express.json());
 
+const cors = require('cors');
+app.use(cors());
+
+
 const { CosmosClient } = require('@azure/cosmos');
 
 const config = require('../config')
@@ -31,40 +35,43 @@ app.post('/games', async (req, res) => {
   let Game_id = uuidv4();
   const newGame = {
     id: Game_id,
-    current_day:1,
+    current_round:1,
     users: [],
     stocks: await generatestocksforgame(["AAPL","ACET","ASB","BHP","CMCSA","CMD","CMTL","DLX","FITB","GPS","GRC","HBAN","IBM","MYE","MYL","NVO","PCH","PG","VSH","WWW"])
   };
 
-  let User_id = uuidv4();
-  const user= {
-    user_id:User_id,
-    username:req.body.username,
-    balance: 5000,
-    profit:0,
-    investments:[],
-    transactions:[]
-  };
-
-  newGame.users.push(user);
   // Try to insert the new game into the container
   try {
     const { resource } = await container.items.create(newGame);
     // Send a 201 status code and the created game as the response
-    res.status(201).json({Game_id,User_id});
+    res.status(200).json({Game_id});
   } catch (error) {
     // If there is an error, send a 500 status code and the error message as the response
     res.status(500).json(error);
   }
 });
 
+app.get('/games/check', async (req, res) => {
+  // Get the game id from the query parameter
+  const gameId = req.query.id;
+  // Try to find an item with the same id in the Games container
+  
+  const { resource} = await container.item(gameId, gameId).read();
+   if(resource!=undefined){
+    res.json({valid:true})
+  } 
+ else{
+  res.json({ valid: false }); }
+      });
 
-app.get('/games', async (req, res) => {
+
+app.get('/games/:id', async (req, res) => {
   // Try to query all the games from the container
+  id=req.params.id;
   try {
-    const { resources } = await container.items.query('SELECT * FROM c').fetchAll();
+    const { resource } = await container.item(id, id).read();
     // Send a 200 status code and the games array as the response
-    res.status(200).json(resources);
+    res.status(200).json(resource);
   } catch (error) {
     // If there is an error, send a 500 status code and the error message as the response
     res.status(500).json(error);
@@ -87,7 +94,7 @@ app.delete("/games/:id", async (req, res) => {
 
 
 
-app.post('/games/:id/newplayer', async (req,res)=> {
+app.post('/games/:id/join-game', async (req,res)=> {
   const id = req.params.id;
   let uuid = uuidv4();
   const user= {
@@ -128,16 +135,16 @@ app.post('/games/:id/newplayer', async (req,res)=> {
 });*/
 
 
-app.put('/games/:id/nextday', async (req, res) => {
+app.put('/games/:id/nextround', async (req, res) => {
   const id = req.params.id;
    try {
     // Read the game item from the container and get the resource property
     const { resource }  = await container.item(id, id).read();
     // Assign the resource property to a constant called game
     const game = resource;
-    if (game.current_day<30){
+    if (game.current_round<30){
       // Increment the current day by one
-      game.current_day++;
+      game.current_round++;
       const users= game.users;
       for (let user of users) {
         user.profit=await calculateProfit(user,game);
@@ -145,7 +152,7 @@ app.put('/games/:id/nextday', async (req, res) => {
       // Update the game item with the modified data
       const updatedGame = await container.item(id, id).replace(game);
       // Send a 200 status code and the updated game as the response
-      res.status(200).json({current_day: game.current_day, Stocks: await game.stocks[game.current_day-1]});
+      res.status(200).json({current_round: game.current_round, Stocks: await game.stocks[game.current_round-1]});
   
     }
     else{
@@ -160,9 +167,6 @@ app.put('/games/:id/nextday', async (req, res) => {
   }
 });
 
-
-
-
 async function createContainer() {
   const { container } = await client
     .database(databaseId)
@@ -173,8 +177,6 @@ async function createContainer() {
 }
 
 createContainer();
-
-
 
 async function getRandomDays(symbol) {
   // Query the stocks container for the item with the given symbol as the partition key
@@ -240,9 +242,9 @@ app.post('/games/:id/buy', async (req, res) => {
   // Get the current day of the game session
   const { resource:game } = await container.item(gameId, gameId).read();
 
-  const currentDay=game.current_day;
+  const currentRound=game.current_round;
   // Get the stock data for the given symbol and current day
-  const stockData = await getStockData(game, symbol, currentDay);
+  const stockData = await getStockData(game, symbol, currentRound);
   // Check if there are enough stocks available
   if (stockData.Availablestocks >= quantity) {
     // Reduce the available stocks by the quantity
@@ -259,7 +261,7 @@ app.post('/games/:id/buy', async (req, res) => {
       const transaction={
         Stock_Symbol:symbol,
         type:'Buy',
-        date:"Day "+currentDay,
+        date:"Day "+currentRound,
         cost:'-'+cost
    
       }
@@ -295,9 +297,9 @@ app.post('/games/:id/buy', async (req, res) => {
   const quantity = req.body.quantity;
   // Get the current day of the game session
   const { resource:game }= await container.item(gameId, gameId).read();
-  const currentDay = game.current_day;
+  const currentRound = game.current_round;
   // Get the stock data for the given symbol and current day
-  const stockData = await getStockData(game, symbol, currentDay );
+  const stockData = await getStockData(game, symbol, currentRound );
   // Increase the available stocks by the quantity
   stockData.Availablestocks += quantity;
   // Calculate the total profit of selling the stock
@@ -309,7 +311,7 @@ app.post('/games/:id/buy', async (req, res) => {
     const transaction={
       Stock_Symbol:symbol,
       type:'Sell',
-      date:"Day "+currentDay,
+      date:"Day "+currentRound,
       cost:'+'+ profit
   
     }
@@ -366,18 +368,18 @@ app.get('/games/:id/investments', async (req, res) => {
   }
 });
 
-async function getStockData(game, symbol, currentDay) {
+async function getStockData(game, symbol, currentRound) {
   // Get the array of arrays of stocks from the game object
   const gameStocks = game.stocks;
   // Check if the current day is within the range of the gameStocks array
-  if (currentDay < 0 || currentDay >= gameStocks.length) {
+  if (currentRound < 0 || currentRound >= gameStocks.length) {
     // Throw an error or return null
-    throw new Error(`Invalid current day ${currentDay}`);
+    throw new Error(`Invalid current day ${currentRound}`);
     // or
     return null;
   }
   // Get the array of stocks for the current day
-  const dayStocks = gameStocks[currentDay-1];
+  const dayStocks = gameStocks[currentRound-1];
   // Find the stock data for the given symbol in the dayStocks array
   const stockData = dayStocks.find(stock => stock.stock_symbol === symbol);
   // Check if the stock data exists
@@ -396,7 +398,7 @@ async function calculateProfit(user, game) {
   // Get the investments, balance, and current day from the user object
   const investments = user.investments;
   const balance = user.balance;
-  const currentDay = game.current_day;
+  const currentRound = game.current_round;
   // Initialize the total value variable
   let totalValue = 0;
   // Loop through the investments array
@@ -406,7 +408,7 @@ async function calculateProfit(user, game) {
     const quantity = investment.quantity;
     //let value = investment.value;
     // Get the current price of the stock
-    const stockdata = await getStockData(game, symbol, currentDay);
+    const stockdata = await getStockData(game, symbol, currentRound);
     const currentPrice=stockdata.price;
     // Calculate the value based on the quantity and the current price
     let value = quantity * currentPrice;
