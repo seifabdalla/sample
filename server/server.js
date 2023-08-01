@@ -102,6 +102,7 @@ app.post('/games/:id/join-game', async (req,res)=> {
     username:req.body.username,
     balance: 5000,
     profit:0,
+    stocksValue:0,
     investments:[],
     transactions:[]
   };
@@ -121,18 +122,20 @@ app.post('/games/:id/join-game', async (req,res)=> {
 })
 
 
-/*app.get('/stocks', async (req, res) => {
-
-  // Try to query all the stocks from the container
+app.get('/games/:gameId/:userId', async (req, res) => {
+  const id=req.params.gameId;
+  const userId=req.params.userId;
+  
   try {
-    const { resources } = await stocksContainer.items.query('SELECT * FROM c').fetchAll();
-    // Send a 200 status code and the stocks array as the response
-    res.status(200).json(resources);
+    const { resource : game} = await container.item(id, id).read();
+    const user =game.users.find(u => u.user_id === userId)
+
+    res.status(200).json(user);
   } catch (error) {
     // If there is an error, send a 500 status code and the error message as the response
     res.status(500).json(error);
   }
-});*/
+})
 
 
 app.put('/games/:id/nextround', async (req, res) => {
@@ -144,15 +147,16 @@ app.put('/games/:id/nextround', async (req, res) => {
     const game = resource;
     if (game.current_round<30){
       // Increment the current day by one
-      game.current_round++;
+      game.current_round+=1;
       const users= game.users;
       for (let user of users) {
-        user.profit=await calculateProfit(user,game);
+        //user.profit=await calculateProfit(user,game);
+        user.stocksValue=calculateStocksValue(game, user);
       }
       // Update the game item with the modified data
       const updatedGame = await container.item(id, id).replace(game);
       // Send a 200 status code and the updated game as the response
-      res.status(200).json({current_round: game.current_round, Stocks: await game.stocks[game.current_round-1]});
+      res.status(200).json({current_round: game.current_round, Stocks:game.stocks[game.current_round-1]});
   
     }
     else{
@@ -177,6 +181,29 @@ async function createContainer() {
 }
 
 createContainer();
+
+// Define a function that takes a game object and a user object as parameters
+function calculateStocksValue(game, user) {
+  if (user.investments.length === 0) {
+    // Return 0 as the total value
+    return 0;
+    }
+  // Initialize a variable to store the total value of the owned stocks
+  let totalValue = 0;
+  // Loop through the user's investments array
+  for (let investment of user.investments) {
+    // Find the current price of the stock in the game's stocks array
+    const stock = game.stocks[game.current_round - 1].find(s => s.stock_symbol === investment.symbol);
+    // Check if the stock exists
+    if (stock) {
+      // Multiply the number of shares by the current price and add it to the total value
+      totalValue += investment.quantity * stock.price;
+    }
+  }
+  // Update the user's stocksValue with the total value
+ return totalValue;
+}
+
 
 async function getRandomDays(symbol) {
   // Query the stocks container for the item with the given symbol as the partition key
@@ -273,11 +300,12 @@ app.post('/games/:id/buy', async (req, res) => {
         portfolioItem = { symbol, quantity ,value};
         user.investments.push(portfolioItem);
       }
-      user.profit=await calculateProfit(user,game);
+      //user.profit=await calculateProfit(user,game);
+     user.stocksValue= await calculateStocksValue(game, user);
       // Update the game session with the modified user data
       const { resource: updatedGame } = await container.item(gameId, gameId).replace(game);
       // Send a 201 status code and a confirmation message as the response
-      res.status(201).json(`You bought ${quantity} shares of ${symbol} for $${cost.toFixed(2)}`);
+      res.status(201).json(`You bought ${quantity} shares of ${symbol} for ${cost.toFixed(2)}`);
     } else {
      // If the user does not exist or does not have enough balance, send a 400 status code and an error message as the response
       res.status(400).json('Invalid request');
@@ -323,7 +351,8 @@ app.post('/games/:id/buy', async (req, res) => {
     if (portfolioItem.quantity === 0) {
       user.investments = user.investments.filter(p => p.symbol !== symbol);
     }
-    user.profit=await calculateProfit(user,game);
+    //user.profit=await calculateProfit(user,game);
+    user.stocksValue= await calculateStocksValue(game, user);
     // Update the game session with the modified user data
     const { resource: updatedGame } = await container.item(gameId, gameId).replace(game);
     // Send a 201 status code and a confirmation message as the response
@@ -375,8 +404,6 @@ async function getStockData(game, symbol, currentRound) {
   if (currentRound < 0 || currentRound >= gameStocks.length) {
     // Throw an error or return null
     throw new Error(`Invalid current day ${currentRound}`);
-    // or
-    return null;
   }
   // Get the array of stocks for the current day
   const dayStocks = gameStocks[currentRound-1];
@@ -422,7 +449,7 @@ async function calculateProfit(user, game) {
   // Calculate the profit as the difference between the total value plus balance and the starting balance
   const profit = (totalValue + balance) - startingBalance;
   // Return the profit variable
-  return profit.toFixed(2);;
+  return profit.toFixed(2);
 }
 
 
