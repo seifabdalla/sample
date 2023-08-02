@@ -150,7 +150,7 @@ app.put('/games/:id/nextround', async (req, res) => {
       game.current_round+=1;
       const users= game.users;
       for (let user of users) {
-        //user.profit=await calculateProfit(user,game);
+        user.profit=await calculateProfit(user,game);
         user.stocksValue=calculateStocksValue(game, user);
       }
       // Update the game item with the modified data
@@ -201,7 +201,7 @@ function calculateStocksValue(game, user) {
     }
   }
   // Update the user's stocksValue with the total value
- return totalValue;
+ return totalValue.toFixed(2);
 }
 
 
@@ -300,8 +300,8 @@ app.post('/games/:id/buy', async (req, res) => {
         portfolioItem = { symbol, quantity ,value};
         user.investments.push(portfolioItem);
       }
-      //user.profit=await calculateProfit(user,game);
-     user.stocksValue= await calculateStocksValue(game, user);
+      user.profit=await calculateProfit(user,game);
+      user.stocksValue=  calculateStocksValue(game, user);
       // Update the game session with the modified user data
       const { resource: updatedGame } = await container.item(gameId, gameId).replace(game);
       // Send a 201 status code and a confirmation message as the response
@@ -351,8 +351,8 @@ app.post('/games/:id/buy', async (req, res) => {
     if (portfolioItem.quantity === 0) {
       user.investments = user.investments.filter(p => p.symbol !== symbol);
     }
-    //user.profit=await calculateProfit(user,game);
-    user.stocksValue= await calculateStocksValue(game, user);
+    user.profit=await calculateProfit(user,game);
+    user.stocksValue= calculateStocksValue(game, user);
     // Update the game session with the modified user data
     const { resource: updatedGame } = await container.item(gameId, gameId).replace(game);
     // Send a 201 status code and a confirmation message as the response
@@ -401,7 +401,7 @@ async function getStockData(game, symbol, currentRound) {
   // Get the array of arrays of stocks from the game object
   const gameStocks = game.stocks;
   // Check if the current day is within the range of the gameStocks array
-  if (currentRound < 0 || currentRound >= gameStocks.length) {
+  if (currentRound < 0 || currentRound > gameStocks.length) {
     // Throw an error or return null
     throw new Error(`Invalid current day ${currentRound}`);
   }
@@ -411,10 +411,7 @@ async function getStockData(game, symbol, currentRound) {
   const stockData = dayStocks.find(stock => stock.stock_symbol === symbol);
   // Check if the stock data exists
   if (!stockData) {
-    // Throw an error or return null
     throw new Error(`No stock data found for symbol ${symbol}`);
-    // or
-    return null;
   }
   // Return the stock data
   return stockData;
