@@ -138,6 +138,22 @@ app.get('/games/:gameId/:userId', async (req, res) => {
 })
 
 
+app.put('/games/:id/currentround' , async (req, res) => {
+  const id = req.params.id;
+   try {
+    // Read the game item from the container and get the resource property
+    const { resource:game }  = await container.item(id, id).read();
+ 
+      res.status(200).json(game.stocks[game.current_round-1]);
+  }
+  catch (error) {
+    // If there is an error, send a 500 status code and the error message as the response
+    res.status(500).json(error);
+  }
+});
+
+
+
 app.put('/games/:id/nextround', async (req, res) => {
   const id = req.params.id;
    try {
@@ -156,7 +172,7 @@ app.put('/games/:id/nextround', async (req, res) => {
       // Update the game item with the modified data
       const updatedGame = await container.item(id, id).replace(game);
       // Send a 200 status code and the updated game as the response
-      res.status(200).json({current_round: game.current_round, Stocks:game.stocks[game.current_round-1]});
+      res.status(200).json(game.stocks[game.current_round-1]);
   
     }
     else{
@@ -288,7 +304,7 @@ app.post('/games/:id/buy', async (req, res) => {
       const transaction={
         Stock_Symbol:symbol,
         type:'Buy',
-        date:"Day "+currentRound,
+        date:"Round "+currentRound,
         cost:'-'+cost
    
       }
@@ -380,7 +396,7 @@ app.get('/games/:id/transactions', async (req, res) => {
   }
 });
 
-app.get('/games/:id/investments', async (req, res) => {
+app.put('/games/:id/investments', async (req, res) => {
   // Get the game id, user id, stock symbol, and quantity from the request body
   try{
   const gameId = req.params.id;
@@ -389,6 +405,7 @@ app.get('/games/:id/investments', async (req, res) => {
   const { resource:game } = await container.item(gameId, gameId).read();
   const user = game.users.find(u => u.user_id === user_id);
   const investments=user.investments;
+
   res.status(200).json(investments);
   } 
   catch (error) {
