@@ -37,7 +37,7 @@ app.post('/games', async (req, res) => {
     id: Game_id,
     current_round:1,
     users: [],
-    stocks: await generatestocksforgame(["AAPL","ACET","ASB","BHP","CMCSA","CMD","CMTL","DLX","FITB","GPS","GRC","HBAN","IBM","MYE","MYL","NVO","PCH","PG","VSH","WWW"])
+    stocks: await generatestocksforgame(["AAPL","AMZN","CSCO","IBM","MSFT"])
   };
 
   // Try to insert the new game into the container
@@ -100,11 +100,10 @@ app.post('/games/:id/join-game', async (req,res)=> {
   const user= {
     user_id:uuid,
     username:req.body.username,
-    balance: 5000,
+    balance: 4000,
     profit:0,
     stocksValue:0,
-    investments:[],
-    transactions:[]
+    investments:[]
   };
   
   // Try to update the game with the given id by adding the user to its users array
@@ -152,6 +151,20 @@ app.put('/games/:id/currentround' , async (req, res) => {
   }
 });
 
+app.put('/games/:id/round' , async (req, res) => {
+  const id = req.params.id;
+   try {
+    // Read the game item from the container and get the resource property
+    const { resource:game }  = await container.item(id, id).read();
+    
+      res.status(200).json({currentRound:game.current_round});
+  }
+  catch (error) {
+    // If there is an error, send a 500 status code and the error message as the response
+    res.status(500).json(error);
+  }
+});
+
 
 
 app.put('/games/:id/nextround', async (req, res) => {
@@ -179,7 +192,7 @@ app.put('/games/:id/nextround', async (req, res) => {
       // Delete the game item from the container
       const { resource } = await container.item(id, id).delete();
       // Send a 200 status code and a confirmation message as the response
-      res.status(200).json(id+" game session has ended")
+      res.status(400).json(id+" game session has ended")
     }
   } catch (error) {
     // If there is an error, send a 500 status code and the error message as the response
@@ -195,6 +208,85 @@ async function createContainer() {
       { offerThroughput: 400 }
     )
 }
+
+
+
+// Define a function to calculate the rate of change between two numbers in percent
+function rateOfChange(oldValue, newValue) {
+  return ((newValue - oldValue) / oldValue) * 100;
+}
+
+// Define an endpoint to get the rate of change for a specific stock in a game session
+app.put('/games/:id/rate-of-change', async (req, res) => {
+  // Get the game id from the request parameter
+  const gameId = req.params.id;
+
+  // Get the stock symbol from the request body
+  const symbol = req.body.symbol;
+
+  // Try to get the game session with the given id from the Games container
+  try {
+    const { resource: game } = await container.item(gameId, gameId).read();
+
+    // Check if the game session exists
+    if (game) {
+      // Get the stocks array and the current round from the game session
+      const stocks = game.stocks;
+      const currentRound = game.current_round;
+
+      // Check if the current round is valid
+      if (currentRound > 1 && currentRound <= stocks.length) {
+        // Get the prices array for the current round and the previous round from the stocks array
+        const currentPrices = stocks[currentRound-1];
+        const previousPrices = stocks[currentRound -2];
+
+        // Initialize a variable to store the rate of change value
+        let rateOfChangeValue;
+
+        // Loop through each element in the prices array
+        for (let i = 0; i < currentPrices.length; i++) {
+          // Get the stock symbol, current price, and previous price from the corresponding elements in the prices array
+          const currentSymbol = currentPrices[i].stock_symbol;
+          const currentPrice = currentPrices[i].price;
+          const previousPrice = previousPrices[i].price;
+
+          // Check if the current symbol matches the requested symbol
+          if (currentSymbol === symbol) {
+            // Calculate the rate of change between the current price and the previous price in percent
+            rateOfChangeValue = rateOfChange(previousPrice, currentPrice);
+
+            // Break out of the loop
+            break;
+          }
+        }
+
+        // Check if the rate of change value is defined
+        if (rateOfChangeValue !== undefined) {
+          // Create an object with the stock symbol and the rate of change value
+          const rateOfChangeObject = {
+            symbol: symbol,
+            rateOfChange: `${rateOfChangeValue.toFixed(2)}%`
+          };
+
+          // Send a 200 status code and the rate of change object as the response
+          res.status(200).json(rateOfChangeObject);
+        } else {
+          // If the rate of change value is not defined, send a 404 status code and a message as the response
+          res.status(404).json({ message: "Stock not found" });
+        }
+      } else {
+        // If the current round is invalid, send a 400 status code and a message as the response
+        res.status(400).json({ message: "Invalid round number" });
+      }
+    } else {
+      // If the game session does not exist, send a 404 status code and a message as the response
+      res.status(404).json({ message: "Game not found" });
+    }
+  } catch (error) {
+    // If there is an error, send a 500 status code and the error message as the response
+    res.status(500).json(error);
+  }
+});
 
 createContainer();
 
@@ -221,6 +313,7 @@ function calculateStocksValue(game, user) {
 }
 
 
+
 async function getRandomDays(symbol) {
   // Query the stocks container for the item with the given symbol as the partition key
   const querySpec = {
@@ -242,14 +335,12 @@ async function getRandomDays(symbol) {
   const item = items[0];
   // Get the array of stocks for that item
   const stocks = item.Stocks;
-  // Shuffle the array using Fisher-Yates algorithm
-  for (let i = stocks.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [stocks[i], stocks[j]] = [stocks[j], stocks[i]];
-  }
-  // Return the first 30 elements of the shuffled array
-  return stocks.slice(0, 30);
+  // Pick a random index between 0 and 270
+  const startIndex = Math.floor(Math.random() * (185));
+  // Return the 30 elements starting from that index
+  return stocks.slice(startIndex, startIndex + 30);
 }
+
 
 
 // A function to create a new game session with a given id and an array of stock symbols
@@ -288,10 +379,6 @@ app.post('/games/:id/buy', async (req, res) => {
   const currentRound=game.current_round;
   // Get the stock data for the given symbol and current day
   const stockData = await getStockData(game, symbol, currentRound);
-  // Check if there are enough stocks available
-  if (stockData.Availablestocks >= quantity) {
-    // Reduce the available stocks by the quantity
-    stockData.Availablestocks -= quantity;
     // Calculate the total cost of buying the stock
     const cost = stockData.price * quantity;
     // Find the user in the game session and check if they have enough balance
@@ -301,14 +388,6 @@ app.post('/games/:id/buy', async (req, res) => {
       user.balance -= cost;
       // Add the stock to the user's portfolio or update the quantity if they already have it
       let portfolioItem = user.investments.find(p => p.symbol === symbol);
-      const transaction={
-        Stock_Symbol:symbol,
-        type:'Buy',
-        date:"Round "+currentRound,
-        cost:'-'+cost
-   
-      }
-      user.transactions.push(transaction);
       if (portfolioItem) {
         portfolioItem.quantity += quantity;
       } else {
@@ -324,12 +403,8 @@ app.post('/games/:id/buy', async (req, res) => {
       res.status(201).json(`You bought ${quantity} shares of ${symbol} for ${cost.toFixed(2)}`);
     } else {
      // If the user does not exist or does not have enough balance, send a 400 status code and an error message as the response
-      res.status(400).json('Invalid request');
+      res.status(400).json("You don't have enough money");
     }
-  } else {
-    // If there are not enough stocks available, send a 400 status code and an error message as the response
-    res.status(400).json('Not enough stocks available');
-  }
 });
 
 // Sell a stock for a user in a game session
@@ -344,22 +419,12 @@ app.post('/games/:id/buy', async (req, res) => {
   const currentRound = game.current_round;
   // Get the stock data for the given symbol and current day
   const stockData = await getStockData(game, symbol, currentRound );
-  // Increase the available stocks by the quantity
-  stockData.Availablestocks += quantity;
   // Calculate the total profit of selling the stock
   const profit = stockData.price * quantity;
   // Find the user in the game session and check if they have enough stocks to sell
   const user = game.users.find(u => u.user_id === user_id);
   let portfolioItem = user.investments.find(p => p.symbol === symbol);
   if (user && portfolioItem && portfolioItem.quantity >= quantity) {
-    const transaction={
-      Stock_Symbol:symbol,
-      type:'Sell',
-      date:"Day "+currentRound,
-      cost:'+'+ profit
-  
-    }
-    user.transactions.push(transaction);
     // Add the profit to the user's balance
     user.balance += profit;
     // Remove the stock from the user's portfolio or update the quantity if they still have some left
@@ -375,11 +440,11 @@ app.post('/games/:id/buy', async (req, res) => {
     res.status(201).json(`You sold ${quantity} shares of ${symbol} for $${profit.toFixed(2)}`);
   } else {
     // If the user does not exist or does not have enough stocks to sell, send a 400 status code and an error message as the response
-    res.status(400).json('Invalid request');
+    res.status(400).json("You don't own this amount of stocks");
   }
 });
 
-app.get('/games/:id/transactions', async (req, res) => {
+app.put('/games/:id/transactions', async (req, res) => {
   // Get the game id, user id, stock symbol, and quantity from the request body
   try{
   const gameId = req.params.id;
@@ -459,7 +524,7 @@ async function calculateProfit(user, game) {
     totalValue += value;
   } 
   // Define the starting balance as a constant
-  const startingBalance = 5000;
+  const startingBalance = 4000;
   // Calculate the profit as the difference between the total value plus balance and the starting balance
   const profit = (totalValue + balance) - startingBalance;
   // Return the profit variable
