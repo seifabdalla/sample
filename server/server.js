@@ -32,6 +32,7 @@ const { v4: uuidv4 } = require('uuid');
 
 app.post('/games', async (req, res) => {
   // Create a new game object with an id and an empty array of users
+  let uuid=uuidv4();
   let Game_id = uuidv4();
   const newGame = {
     id: Game_id,
@@ -40,9 +41,20 @@ app.post('/games', async (req, res) => {
     stocks: await generatestocksforgame(["AAPL","AMZN","CSCO","IBM","MSFT"])
   };
 
+  const user={
+    user_id:uuid,
+    username:'bot-user',
+    balance: 4000,
+    profit:0,
+    stocksValue:0,
+    investments:[]
+  }
+
   // Try to insert the new game into the container
   try {
+    newGame.users.push(user);
     const { resource } = await container.items.create(newGame);
+   
     // Send a 201 status code and the created game as the response
     res.status(200).json({Game_id});
   } catch (error) {
@@ -143,7 +155,7 @@ app.put('/games/:id/currentround' , async (req, res) => {
     // Read the game item from the container and get the resource property
     const { resource:game }  = await container.item(id, id).read();
  
-      res.status(200).json(game.stocks[game.current_round-1]);
+      res.status(200).json(game.stocks[game.current_round]);
   }
   catch (error) {
     // If there is an error, send a 500 status code and the error message as the response
@@ -174,7 +186,7 @@ app.put('/games/:id/nextround', async (req, res) => {
     const { resource }  = await container.item(id, id).read();
     // Assign the resource property to a constant called game
     const game = resource;
-    if (game.current_round<30){
+    if (game.current_round<10){
       // Increment the current day by one
       game.current_round+=1;
       const users= game.users;
@@ -185,12 +197,12 @@ app.put('/games/:id/nextround', async (req, res) => {
       // Update the game item with the modified data
       const updatedGame = await container.item(id, id).replace(game);
       // Send a 200 status code and the updated game as the response
-      res.status(200).json(game.stocks[game.current_round-1]);
+      res.status(200).json(game.stocks[game.current_round]);
   
     }
     else{
       // Delete the game item from the container
-      const { resource } = await container.item(id, id).delete();
+      //const { resource } = await container.item(id, id).delete();
       // Send a 200 status code and a confirmation message as the response
       res.status(400).json(id+" game session has ended")
     }
@@ -235,10 +247,10 @@ app.put('/games/:id/rate-of-change', async (req, res) => {
       const currentRound = game.current_round;
 
       // Check if the current round is valid
-      if (currentRound > 1 && currentRound <= stocks.length) {
+      if (currentRound > 0 && currentRound < stocks.length) {
         // Get the prices array for the current round and the previous round from the stocks array
-        const currentPrices = stocks[currentRound-1];
-        const previousPrices = stocks[currentRound -2];
+        const currentPrices = stocks[currentRound];
+        const previousPrices = stocks[currentRound -1];
 
         // Initialize a variable to store the rate of change value
         let rateOfChangeValue;
@@ -301,7 +313,7 @@ function calculateStocksValue(game, user) {
   // Loop through the user's investments array
   for (let investment of user.investments) {
     // Find the current price of the stock in the game's stocks array
-    const stock = game.stocks[game.current_round - 1].find(s => s.stock_symbol === investment.symbol);
+    const stock = game.stocks[game.current_round].find(s => s.stock_symbol === investment.symbol);
     // Check if the stock exists
     if (stock) {
       // Multiply the number of shares by the current price and add it to the total value
@@ -336,9 +348,9 @@ async function getRandomDays(symbol) {
   // Get the array of stocks for that item
   const stocks = item.Stocks;
   // Pick a random index between 0 and 270
-  const startIndex = Math.floor(Math.random() * (185));
+  const startIndex = Math.floor(Math.random() * (104))+94;
   // Return the 30 elements starting from that index
-  return stocks.slice(startIndex, startIndex + 30);
+  return stocks.slice(startIndex, startIndex + 11);
 }
 
 
@@ -354,7 +366,7 @@ async function generatestocksforgame(symbols) {
     stockMap.set(symbol, days);
   }
   // For each day, create an array of stocks for each company and push it to the gameStocks array
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 11; i++) {
     let dayStocks = [];
     for (let symbol of symbols) {
       // Get the stock for the current day and company from the map
@@ -488,7 +500,7 @@ async function getStockData(game, symbol, currentRound) {
     throw new Error(`Invalid current day ${currentRound}`);
   }
   // Get the array of stocks for the current day
-  const dayStocks = gameStocks[currentRound-1];
+  const dayStocks = gameStocks[currentRound];
   // Find the stock data for the given symbol in the dayStocks array
   const stockData = dayStocks.find(stock => stock.stock_symbol === symbol);
   // Check if the stock data exists
@@ -530,6 +542,29 @@ async function calculateProfit(user, game) {
   // Return the profit variable
   return profit.toFixed(2);
 }
+
+// Define a function that sorts an array of users by their profit in descending order
+function sortByProfit(users) {
+  return users.slice().sort((a, b) => b.profit - a.profit);
+}
+
+// Define a route that returns the ranked users for a given game id
+app.put('/games/:id/rank', async (req, res) => {
+  // Get the game id from the request parameter
+  const gameId = req.params.id;
+  // Try to read the game from the container
+  try {
+    const { resource: game } = await container.item(gameId, gameId).read();
+    // Sort the users by their profit
+    const rankedUsers = sortByProfit(game.users);
+    // Send a 200 status code and the ranked users array as the response
+    res.status(200).json(rankedUsers);
+  } catch (error) {
+    // If there is an error, send a 500 status code and the error message as the response
+    res.status(500).json(error);
+  }
+});
+
 
 
 // Listen on port 3000
