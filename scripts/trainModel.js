@@ -1,10 +1,7 @@
 const LogisticRegression = require('logistic-regression');
 const fs = require('fs');
 const math = require('mathjs');
-
-// Simulated historical stock data (replace with your data)
-const trainingData = [];
-const trainingLabels = [];
+const { loadAndPreprocessData } = require('./dataRetrieval'); // Adjust the path as needed
 
 // Utility function for train-test split
 function trainTestSplit(data, labels, testRatio) {
@@ -28,34 +25,66 @@ function accuracyScore(trueLabels, predictedLabels) {
 }
 
 function precisionScore(trueLabels, predictedLabels) {
-  // Calculate precision here
+  let truePositives = 0;
+  let falsePositives = 0;
+
+  for (let i = 0; i < trueLabels.length; i++) {
+    if (trueLabels[i] === 1 && predictedLabels[i] === 1) {
+      truePositives++;
+    } else if (trueLabels[i] === 0 && predictedLabels[i] === 1) {
+      falsePositives++;
+    }
+  }
+
+  return truePositives / (truePositives + falsePositives);
 }
 
 function recallScore(trueLabels, predictedLabels) {
-  // Calculate recall here
+  let truePositives = 0;
+  let falseNegatives = 0;
+
+  for (let i = 0; i < trueLabels.length; i++) {
+    if (trueLabels[i] === 1 && predictedLabels[i] === 1) {
+      truePositives++;
+    } else if (trueLabels[i] === 1 && predictedLabels[i] === 0) {
+      falseNegatives++;
+    }
+  }
+
+  return truePositives / (truePositives + falseNegatives);
 }
 
 function f1Score(trueLabels, predictedLabels) {
-  // Calculate F1-score here
+  const precision = precisionScore(trueLabels, predictedLabels);
+  const recall = recallScore(trueLabels, predictedLabels);
+
+  return (2 * precision * recall) / (precision + recall);
+}
+async function trainModel() {
+  const { trainingData, trainingLabels } = await loadAndPreprocessData();
+
+  // Split data into training and testing sets
+  const { xTrain, xTest, yTrain, yTest } = trainTestSplit(trainingData, trainingLabels, 0.8);
+
+  // Create and train the model
+  const model = new LogisticRegression();
+  model.fit(xTrain, yTrain);
+
+  // Validate the model
+  const yPred = model.predict(xTest);
+  const accuracy = accuracyScore(yTest, yPred);
+  const precision = precisionScore(yTest, yPred);
+  const recall = recallScore(yTest, yPred);
+  const f1 = f1Score(yTest, yPred);
+
+  console.log(`Accuracy: ${accuracy}`);
+  console.log(`Precision: ${precision}`);
+  console.log(`Recall: ${recall}`);
+  console.log(`F1-Score: ${f1}`);
 }
 
-// Load and preprocess data here
+// Run the training and evaluation process
+trainModel().catch(error => {
+  console.error('An error occurred:', error);
+});
 
-// Split data into training and testing sets
-const { xTrain, xTest, yTrain, yTest } = trainTestSplit(trainingData, trainingLabels, 0.8);
-
-// Create and train the model
-const model = new LogisticRegression();
-model.fit(xTrain, yTrain);
-
-// Validate the model
-const yPred = model.predict(xTest);
-const accuracy = accuracyScore(yTest, yPred);
-const precision = precisionScore(yTest, yPred);
-const recall = recallScore(yTest, yPred);
-const f1 = f1Score(yTest, yPred);
-
-console.log(`Accuracy: ${accuracy}`);
-console.log(`Precision: ${precision}`);
-console.log(`Recall: ${recall}`);
-console.log(`F1-Score: ${f1}`);
