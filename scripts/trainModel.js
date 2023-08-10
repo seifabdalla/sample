@@ -27,6 +27,7 @@ function preprocessCompanyData(companyData) {
     else if (item.decision === 'buy') return 1;
     else if (item.decision === 'sell') return 2;
     else return -1; // Undefined label, handle this as needed
+    
   });
 
   return { trainingData, trainingLabels };
